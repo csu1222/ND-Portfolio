@@ -18,8 +18,16 @@ namespace ND.UI.CalendarEditor
         {
             if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null)
             {
-                EditorApplication.delayCall += Generate;
+                EditorApplication.delayCall += GenerateIfMissing;
             }
+        }
+
+        private static void GenerateIfMissing()
+        {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null)
+                return;
+
+            Generate();
         }
 
         [MenuItem("ND/UI/Calendar/Generate Example Calendar Panel")]

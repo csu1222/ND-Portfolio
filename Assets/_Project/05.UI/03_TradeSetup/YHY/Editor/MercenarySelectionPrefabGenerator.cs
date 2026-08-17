@@ -13,7 +13,15 @@ public static class MercenarySelectionPrefabGenerator
     {
         if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null)
             return;
-        EditorApplication.delayCall += Generate;
+        EditorApplication.delayCall += GenerateIfMissing;
+    }
+
+    private static void GenerateIfMissing()
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null)
+            return;
+
+        Generate();
     }
 
     [MenuItem("ND/UI/Generate Mercenary Selection Panel")]

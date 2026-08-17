@@ -18,7 +18,15 @@ namespace ND.UI.Quest.Editor
         {
             if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null)
                 return;
-            EditorApplication.delayCall += Generate;
+            EditorApplication.delayCall += GenerateIfMissing;
+        }
+
+        private static void GenerateIfMissing()
+        {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null)
+                return;
+
+            Generate();
         }
 
         [MenuItem("ND/UI/Quest/Generate Test Town Quest Panel")]

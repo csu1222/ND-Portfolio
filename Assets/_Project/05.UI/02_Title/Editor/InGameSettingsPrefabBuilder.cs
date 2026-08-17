@@ -16,7 +16,15 @@ namespace ND.UI.Title.Editor
         static InGameSettingsPrefabBuilder()
         {
             if (AssetDatabase.LoadAssetAtPath<GameObject>(TargetPath) == null)
-                EditorApplication.delayCall += Create;
+                EditorApplication.delayCall += CreateIfMissing;
+        }
+
+        private static void CreateIfMissing()
+        {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(TargetPath) != null)
+                return;
+
+            Create();
         }
 
         [MenuItem("Tools/ND/Settings/Create InGame Settings Prefab")]

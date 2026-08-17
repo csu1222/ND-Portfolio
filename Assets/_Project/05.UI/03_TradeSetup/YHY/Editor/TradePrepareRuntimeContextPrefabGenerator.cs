@@ -10,7 +10,15 @@ public static class TradePrepareRuntimeContextPrefabGenerator
     private static void GenerateOnceAfterImport()
     {
         if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null)
-            EditorApplication.delayCall += Generate;
+            EditorApplication.delayCall += GenerateIfMissing;
+    }
+
+    private static void GenerateIfMissing()
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null)
+            return;
+
+        Generate();
     }
 
     [MenuItem("ND/UI/Generate Trade Prepare Runtime Context")]
