@@ -3686,7 +3686,6 @@ GameObject:
   - component: {fileID: 2252206989221123798}
   - component: {fileID: 5144731988934662740}
   - component: {fileID: 9064944256389305420}
-  - component: {fileID: 6003526089961617340}
   m_Layer: 5
   m_Name: Settings_Close_Button
   m_TagString: Untagged
@@ -3808,19 +3807,6 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
---- !u!114 &6003526089961617340
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3638714029405171145}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
-  soundId: ui_sfx_button_wooden
 --- !u!1 &3687038701631735322
 GameObject:
   m_ObjectHideFlags: 0
@@ -4171,7 +4157,6 @@ GameObject:
   - component: {fileID: 4278143172365742398}
   - component: {fileID: 1409516694311508393}
   - component: {fileID: 7985871615550917001}
-  - component: {fileID: 6558132980842598659}
   m_Layer: 5
   m_Name: Settings_Reset_Button
   m_TagString: Untagged
@@ -4293,19 +4278,6 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
---- !u!114 &6558132980842598659
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3737883101925820071}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
-  soundId: ui_sfx_button_wooden
 --- !u!1 &3813636200607583916
 GameObject:
   m_ObjectHideFlags: 0
