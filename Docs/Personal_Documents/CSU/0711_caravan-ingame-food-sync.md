@@ -262,9 +262,9 @@ Framework/Run InGame Food Consumption Smoke
 ```powershell
 & "C:\Program Files\Unity\Hub\Editor\6000.5.2f1\Editor\Unity.exe" `
   -batchmode -nographics -quit `
-  -projectPath "D:\CS_Project\ND" `
+  -projectPath "<PROJECT_ROOT>" `
   -executeMethod ND.Framework.Editor.FrameworkM1LoopE2EEditorTests.RunAllFromBatchMode `
-  -logFile "D:\CS_Project\ND\Logs\framework-m1-e2e.log"
+  -logFile "<PROJECT_ROOT>\Logs\framework-m1-e2e.log"
 ```
 
 ---

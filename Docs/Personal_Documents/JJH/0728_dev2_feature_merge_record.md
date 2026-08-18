@@ -228,7 +228,7 @@ Inconclusive 0
 
 결과 파일:
 
-`C:\Users\ADMIN\AppData\LocalLow\DefaultCompany\ND\TestResults.xml`
+`<USER_HOME>\AppData\LocalLow\DefaultCompany\ND\TestResults.xml`
 
 ### Market Inventory Integration Probe
 
