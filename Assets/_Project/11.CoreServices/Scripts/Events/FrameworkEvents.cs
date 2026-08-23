@@ -135,6 +135,15 @@ namespace ND.Framework
         /// </summary>
         public static event Action<string, string, JourneyResultData> TradeSettlementReady;
 
+        /// <summary>출발 transaction과 저장이 성공해 Traveling이 확정된 뒤 발생한다.</summary>
+        public static event Action<string, string> TradeStarted;
+
+        /// <summary>새 정산이 생성되고 저장된 뒤 발생한다. 기존 pending 복구에서는 발생하지 않는다.</summary>
+        public static event Action<string, string, JourneyResultData> TradeSettlementCreated;
+
+        /// <summary>정산 claim transaction과 저장이 성공한 뒤 발생한다.</summary>
+        public static event Action<string, string> TradeClaimed;
+
         /// <summary>
         /// 인게임 화면 상태가 preparation, traveling, settlement 중 하나로 변경될 때 발생한다.
         /// </summary>
@@ -363,6 +372,24 @@ namespace ND.Framework
             // UI bridge가 active trade와 result를 검증할 수 있도록 두 값을 그대로 전달한다.
             FrameworkLog.Info($"TradeSettlementReady event raised. TradeId: {tradeId}");
             TradeSettlementReady?.Invoke(caravanId, tradeId, result);
+        }
+
+        public static void RaiseTradeStarted(string caravanId, string tradeId)
+        {
+            FrameworkLog.Info($"TradeStarted event raised. CaravanId: {caravanId}, TradeId: {tradeId}");
+            TradeStarted?.Invoke(caravanId, tradeId);
+        }
+
+        public static void RaiseTradeSettlementCreated(string caravanId, string tradeId, JourneyResultData result)
+        {
+            FrameworkLog.Info($"TradeSettlementCreated event raised. CaravanId: {caravanId}, TradeId: {tradeId}");
+            TradeSettlementCreated?.Invoke(caravanId, tradeId, result);
+        }
+
+        public static void RaiseTradeClaimed(string caravanId, string tradeId)
+        {
+            FrameworkLog.Info($"TradeClaimed event raised. CaravanId: {caravanId}, TradeId: {tradeId}");
+            TradeClaimed?.Invoke(caravanId, tradeId);
         }
 
         /// <summary>

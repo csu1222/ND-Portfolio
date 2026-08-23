@@ -302,6 +302,7 @@ namespace ND.Framework
             FrameworkEvents.RaiseCaravanJourneyStateChanged(
                 caravanId,
                 runtimeCaravan.state);
+            FrameworkEvents.RaiseTradeStarted(caravanId, tradeId);
 
             setActiveCaravan?.Invoke(runtimeCaravan);
             if (saveData.selectedCaravanId == caravanId)
@@ -554,6 +555,10 @@ namespace ND.Framework
             FrameworkEvents.RaiseCaravanJourneyStateChanged(
                 targetCaravanId,
                 caravan.state);
+            if (saveImmediately)
+            {
+                FrameworkEvents.RaiseTradeStarted(targetCaravanId, tradeId);
+            }
 
             clearSettlementCache?.Invoke();
             setActiveCaravan?.Invoke(caravan);
