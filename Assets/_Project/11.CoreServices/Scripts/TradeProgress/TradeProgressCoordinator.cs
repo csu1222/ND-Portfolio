@@ -1535,6 +1535,7 @@ namespace ND.Framework
             FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
             onTownVisited?.Invoke(settlementTownId);
+            FrameworkEvents.RaiseTradeClaimed(caravanId, tradeId);
             return ClaimSettlementResult.Success(saveResult);
         }
 
@@ -2289,6 +2290,10 @@ namespace ND.Framework
                 saveData.tradeProgress.caravanId,
                 settlementTradeId,
                 result);
+            FrameworkEvents.RaiseTradeSettlementCreated(
+                saveData.tradeProgress.caravanId,
+                settlementTradeId,
+                result);
 
             if (result.grade == JourneyResultGrade.Failed)
             {
@@ -2470,6 +2475,8 @@ namespace ND.Framework
                         savedCaravan.state);
                 }
                 FrameworkEvents.RaiseTradeSettlementReady(
+                    notification.CaravanId, notification.TradeId, notification.Result);
+                FrameworkEvents.RaiseTradeSettlementCreated(
                     notification.CaravanId, notification.TradeId, notification.Result);
                 if (isOfflineRestore)
                     FrameworkEvents.RaiseTradeOfflineCompleted(notification.TradeId);
