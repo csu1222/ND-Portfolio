@@ -1,0 +1,1513 @@
+<title>산적 조우 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+
+<style>
+/* ── 단일 테마 커밋: 해질녘 흙길. 밝은 테마로 뒤집으면 스테이지가 무너지므로
+      의도적으로 한 세계에 고정하고, 모든 색을 명시적으로 칠한다. ───────────── */
+:root{
+  --ground:#15130f; --surface:#211c16; --surface2:#2b241c; --line:#3b3229;
+  --hanji:#e3d9c6; --dust:#8c8071; --dust-dim:#5f574c;
+  --juhong:#c8452d;  /* 주홍(단청) — 적·위험 */
+  --cheong:#3e9a86;  /* 청록(단청) — 준비완료·보호 */
+  --geum:#c9a227;    /* 금 — 지금이 그 순간 */
+  --jade:#6f8fa8;    /* 담청 — 힐러 */
+  --f-display:"Gowun Batang","Nanum Myeongjo",Georgia,serif;
+  --f-body:"IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"Consolas",monospace;
+  --r:3px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--hanji);font-family:var(--f-body);
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 20px 64px}
+[hidden]{display:none !important}
+
+/* ── 집중(슬로우) ────────────────────────────────────────────────
+   준비된 용병을 고르면 시간이 느려지고 화면의 채도가 빠진다.
+   색이 남는 건 딱 둘 — 내가 고른 용병, 그리고 나에게 오는 위협.
+   결과적으로 화면에 붉은 것만 남아 "지금 너를 노리는 건 이것뿐"이 보인다. */
+:root{--fade:.13s}
+#road,.foe,.lane,.panel,.masthead,.chord{
+  transition:filter var(--fade) linear, opacity var(--fade) linear}
+
+body.focus #road{filter:saturate(.06) brightness(.70)}
+body.focus .foe:not(.telegraphing){filter:saturate(.04);opacity:.5}
+body.focus .lane:not(.selected):not(.aimed){filter:saturate(.04);opacity:.45}
+body.focus .panel,body.focus .masthead{filter:saturate(.04);opacity:.4}
+/* 지목선(SVG)과 커맨드 줄은 손대지 않는다 — 지금 읽어야 할 정보다. */
+
+@media (prefers-reduced-motion:reduce){
+  /* 채도 깜빡임은 끄고 슬로우만 남긴다 */
+  body.focus #road,body.focus .foe,body.focus .lane,
+  body.focus .panel,body.focus .masthead{filter:none;opacity:1}
+}
+
+/* ── 머리 ───────────────────────────────────────────────────────── */
+.masthead{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;
+  gap:14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+
+.tally{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.tally div{padding:8px 14px;text-align:center;background:var(--surface);min-width:74px}
+.tally div+div{border-left:1px solid var(--line)}
+.tally b{display:block;font-family:var(--f-mono);font-size:19px;font-weight:600;
+  font-variant-numeric:tabular-nums;line-height:1.2}
+.tally span{display:block;font-size:10px;letter-spacing:.1em;color:var(--dust);
+  text-transform:uppercase;margin-top:2px}
+.tally .hand b{color:var(--juhong)}
+.tally .coin b{color:var(--geum)}
+.purse{display:flex;align-items:baseline;gap:4px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--surface);padding:8px 14px;flex-shrink:0}
+.purse b{font-family:var(--f-mono);font-size:19px;font-weight:600;color:var(--geum);
+  font-variant-numeric:tabular-nums;line-height:1.2}
+.purse span{font-size:11px;color:var(--dust)}
+.ratio{font-family:var(--f-mono);font-size:12px;color:var(--dust);margin:0;text-align:right}
+.ratio.warn{color:var(--juhong)}
+
+/* ── 무대 ───────────────────────────────────────────────────────── */
+.arena{position:relative;margin-top:24px}
+.stage{position:relative;border:1px solid var(--line);border-radius:var(--r);
+  overflow:hidden;background:#0f0d0a}
+#road{display:block;width:100%;height:auto;aspect-ratio:16/7}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.overlay > *{pointer-events:auto}
+
+/* 지목선/보호선 — 적 카드와 용병 레인을 가로지르므로 arena 전체를 덮는다 */
+.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;overflow:visible}
+.wires .wire{fill:none;stroke-width:2.5;stroke-linecap:round}
+.wires .glow{fill:none;stroke-width:8;opacity:.16;stroke-linecap:round}
+.wires .wlabel{font-family:var(--f-mono);font-size:11px;font-weight:600;paint-order:stroke;
+  stroke:#0f0d0a;stroke-width:3.5;stroke-linejoin:round}
+.wires .guard{fill:none;stroke:var(--cheong);stroke-width:2;stroke-dasharray:5 5;opacity:.85}
+
+/* 적 3인 띠 */
+.foes{position:absolute;top:0;left:0;right:0;padding:12px 14px 22px;
+  background:linear-gradient(to bottom,rgba(10,9,7,.94),rgba(10,9,7,0))}
+/* 적 수에 따라 열 수와 폭이 바뀐다(1명일 때 카드가 화면을 다 먹지 않게) */
+.foes-inner{display:grid;gap:8px;margin:0 auto}
+.foe{border:1px solid var(--line);border-radius:var(--r);background:rgba(24,20,15,.82);
+  padding:8px 11px 9px;transition:border-color .12s,opacity .2s}
+.foe.telegraphing{border-color:var(--juhong);background:rgba(48,23,17,.92)}
+.foe.dead{opacity:.3;border-color:var(--dust-dim)}
+.foe.leader{border-left:3px solid var(--geum)}
+/* 때릴 산적을 고르는 단계 — 살아 있는 적만 집을 수 있다 */
+.foe.targetable{border-color:var(--geum);background:rgba(48,40,18,.94);cursor:pointer}
+.foe.targetable .foe-num{background:var(--geum);color:var(--ground);border-color:var(--geum)}
+.foe:focus-visible{outline:2px solid var(--geum);outline-offset:1px}
+.foe-num{font-family:var(--f-mono);font-size:10px;font-weight:600;color:var(--dust);
+  border:1px solid var(--line);border-radius:2px;padding:0 5px;flex-shrink:0}
+.foe-head{display:flex;align-items:baseline;gap:7px}
+.foe-name{font-family:var(--f-display);font-size:15px;font-weight:700;white-space:nowrap}
+.foe-role{font-family:var(--f-mono);font-size:10px;color:var(--dust);letter-spacing:.06em}
+.foe-hp{height:4px;background:var(--line);border-radius:99px;margin-top:6px;overflow:hidden}
+.foe-hp i{display:block;height:100%;background:var(--juhong);width:100%;transition:width .16s}
+.foe.dead .foe-hp i{background:var(--dust-dim)}
+
+/* 공격 게이지 — 칸 수가 곧 레벨이다. 칸이 많을수록 오래 걸리고 아프다.
+   흐린 회색이면 충전 중(대상 미정), 다 차서 붉어지면 대상이 정해진 것. */
+.foe-gauge{display:flex;gap:3px;margin-top:5px}
+.foe-gauge .seg{flex:1;height:6px;background:var(--line);border-radius:99px;overflow:hidden}
+/* 흘려보낸 칸 — 이 적은 더 큰 걸 노리고 있다 */
+.foe-gauge .seg.passed{box-shadow:inset 0 0 0 1px var(--geum)}
+.foe-gauge i{display:block;height:100%;width:0%;background:var(--dust-dim)}
+.foe.aiming .foe-gauge i{background:var(--juhong)}
+/* 둔화 — 우리가 걸어놓은 상태라 아군색(청록)으로 표시한다 */
+.foe.slowed .foe-gauge i{background:var(--cheong)}
+.foe.slowed:not(.aiming){border-color:var(--cheong)}
+.foe.dead .foe-gauge{opacity:.3}
+.aim{display:flex;align-items:center;gap:6px;margin-top:7px;min-height:20px;font-size:12px;color:var(--dust)}
+.aim .g{font-size:15px;line-height:1}
+.aim .arrow{color:var(--juhong);font-weight:700}
+.aim .who{color:var(--hanji);font-weight:600}
+.aim .who.covered{color:var(--cheong)}
+
+/* 국면 카드 */
+.card{background:rgba(25,21,16,.95);border:1px solid var(--line);border-radius:var(--r);
+  padding:22px 26px;max-width:470px;text-align:center;backdrop-filter:blur(3px)}
+.card h2{font-family:var(--f-display);font-size:23px;margin:0 0 6px;font-weight:700}
+.card p{margin:0 0 16px;color:var(--dust);font-size:14px}
+.countdown{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px}
+.ring{width:38px;height:38px;flex-shrink:0}
+.ring circle{fill:none;stroke-width:3}
+.ring .bg{stroke:var(--line)}
+.ring .fg{stroke:var(--juhong);stroke-linecap:round;transition:stroke-dashoffset .1s linear}
+.countdown span{font-family:var(--f-mono);font-size:12px;color:var(--dust);letter-spacing:.06em}
+.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.choices.four{grid-template-columns:repeat(4,1fr)}
+@media (max-width:520px){ .choices.four{grid-template-columns:repeat(2,1fr)} }
+/* 협상 — 재화로 치르는 유일한 선택지라 금색으로 구분한다 */
+.choice[data-act="bribe"] kbd{background:var(--geum)}
+.choice[data-act="bribe"]:hover:not(:disabled),
+.choice[data-act="bribe"]:focus-visible:not(:disabled){border-color:var(--geum);background:#2a2416}
+.choice em{font-style:normal;font-size:11px;color:var(--dust);line-height:1.3;
+  font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.choice.broke{opacity:.42;cursor:not-allowed}
+.choice.broke em{color:var(--juhong)}
+.choice{font-family:var(--f-body);font-size:14px;font-weight:600;color:var(--hanji);
+  background:var(--surface2);border:1px solid var(--line);border-radius:var(--r);
+  padding:12px 8px 10px;cursor:pointer;transition:border-color .12s,background .12s;
+  display:flex;flex-direction:column;align-items:center;gap:3px}
+.choice:hover,.choice:focus-visible{border-color:var(--cheong);background:#332b21;outline:none}
+.choice kbd{font-family:var(--f-mono);font-size:10px;color:var(--ground);background:var(--dust);
+  border-radius:2px;padding:1px 5px;font-weight:600}
+.choice.recommended{border-color:var(--dust)}
+
+/* ── 전투 HUD ───────────────────────────────────────────────────── */
+.hud{margin-top:14px;display:grid;gap:10px}
+
+/* 커맨드 줄 — 지금 어느 단계인지 */
+.chord{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);padding:9px 14px;font-family:var(--f-mono);font-size:12px;min-height:44px}
+.chord.active{border-color:var(--geum);background:#241f14}
+.chord .step{display:flex;align-items:center;gap:6px;color:var(--dust-dim)}
+.chord .step.on{color:var(--hanji)}
+.chord .step.on .box{border-color:var(--geum);color:var(--geum)}
+.chord .step .box{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;
+  border:1px solid var(--line);border-radius:2px;font-weight:600;color:var(--dust-dim)}
+.chord .step.done .box{border-color:var(--cheong);color:var(--cheong)}
+.chord .sep{color:var(--dust-dim)}
+.chord .tip{margin-left:auto;color:var(--dust);text-align:right}
+.chord .tip b{color:var(--hanji);font-weight:600}
+
+.lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.lane{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);
+  padding:11px 13px 10px;text-align:left;cursor:pointer;position:relative;
+  font-family:var(--f-body);color:var(--hanji);transition:border-color .12s,background .12s;
+  display:flex;flex-direction:column}
+.lane:focus-visible{outline:2px solid var(--cheong);outline-offset:1px}
+.lane.ready{border-color:var(--cheong)}
+.lane.ready.healer{border-color:var(--jade)}
+/* 선택 하이라이트 자체가 제한시간을 알린다 — 처음엔 느긋하게, 끝이 가까울수록 빠르게 점멸.
+   별도 카운트다운 UI 없이 시선이 이미 가 있는 곳에서 남은 시간이 읽힌다. */
+.lane.selected{border-color:var(--geum);background:#241f14;transition:none}
+.lane.selected::after{
+  content:"";position:absolute;inset:-1px;border-radius:var(--r);
+  box-shadow:0 0 0 2px var(--geum), 0 0 14px 1px rgba(201,162,39,.45);
+  opacity:var(--pulse,0);pointer-events:none}
+@media (prefers-reduced-motion:reduce){
+  .lane.selected::after{opacity:.7 !important}   /* 깜빡임 대신 은은하게 고정 */
+}
+.lane.targetable{border-color:var(--geum);background:#221d13}
+.lane.aimed{border-color:var(--juhong);background:#2c1a14}
+.lane.guarded{box-shadow:inset 0 0 0 1px var(--cheong)}
+.lane.locked{animation:shake .3s}
+.lane.down{opacity:.42;cursor:default;border-color:var(--dust-dim);background:var(--ground)}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+
+.lane-head{display:flex;align-items:baseline;gap:7px;margin-bottom:1px;flex-wrap:wrap}
+.lane-key{font-family:var(--f-mono);font-size:10px;font-weight:600;color:var(--ground);
+  background:var(--dust);border-radius:2px;padding:1px 6px}
+.lane.ready .lane-key{background:var(--cheong)}
+.lane.ready.healer .lane-key{background:var(--jade)}
+.lane.selected .lane-key{background:var(--geum)}
+.lane-role{font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;color:var(--dust);
+  border:1px solid var(--line);border-radius:2px;padding:0 5px}
+.lane-name{font-family:var(--f-display);font-size:16px;font-weight:700}
+.lane-badges{margin-left:auto;display:flex;gap:5px;font-family:var(--f-mono);font-size:10px;font-weight:600}
+.lane-badges .aimtag{color:var(--juhong)}
+.lane-badges .guardtag{color:var(--cheong)}
+
+.hpline{display:flex;align-items:center;gap:8px;margin-top:6px}
+.hpline .track{flex:1;height:5px;background:var(--line);border-radius:99px;overflow:hidden}
+.hpline .track i{display:block;height:100%;background:var(--cheong);width:100%;transition:width .18s}
+.hpline .track i.hurt{background:var(--geum)}
+.hpline .track i.crit{background:var(--juhong)}
+.hpline b{font-family:var(--f-mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--dust)}
+
+.skills{display:flex;flex-direction:column;gap:4px;margin-top:9px}
+.skillrow{display:flex;align-items:flex-start;gap:7px;border:1px solid transparent;border-radius:2px;
+  padding:3px 5px;font-size:11.5px;color:var(--dust);line-height:1.45;cursor:pointer;
+  background:none;text-align:left;font-family:var(--f-body);width:100%}
+.skillrow:hover{border-color:var(--line)}
+.skillrow:focus-visible{outline:2px solid var(--cheong);outline-offset:1px}
+.skillrow .n{font-family:var(--f-mono);font-size:10px;font-weight:600;color:var(--dust-dim);
+  border:1px solid var(--line);border-radius:2px;padding:0 5px;flex-shrink:0;margin-top:1px}
+.skillrow b{color:var(--hanji);font-weight:600}
+.lane.selected .skillrow{border-color:var(--line)}
+.lane.selected .skillrow .n{color:var(--geum);border-color:var(--geum)}
+.skillrow.picked{border-color:var(--geum);background:#2b2415}
+.skillrow em{font-style:normal;color:var(--dust-dim)}
+/* 필요 게이지 — 지금 못 쓰는 스킬은 흐려진다 */
+.skillrow .cost{font-family:var(--f-mono);font-size:10px;font-weight:600;color:var(--cheong);
+  border:1px solid var(--line);border-radius:2px;padding:0 4px;flex-shrink:0;margin-top:1px;
+  font-variant-numeric:tabular-nums}
+.skillrow.short{opacity:.38}
+.skillrow.short .cost{color:var(--dust-dim)}
+.lane.healer .skillrow .cost{color:var(--jade)}
+
+/* 게이지에 1/3·2/3 눈금을 새겨 "어디까지 차면 뭐가 열리는지"를 바에서 바로 읽게 한다 */
+.lane-gauge{height:6px;background:var(--line);border-radius:99px;margin-top:9px;
+  overflow:hidden;position:relative}
+.lane-gauge i{display:block;height:100%;background:var(--dust);width:0%}
+.lane-gauge::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(90deg,transparent calc(33.333% - 1px),var(--ground) calc(33.333% - 1px),
+                    var(--ground) calc(33.333% + 1px),transparent calc(33.333% + 1px)),
+    linear-gradient(90deg,transparent calc(66.666% - 1px),var(--ground) calc(66.666% - 1px),
+                    var(--ground) calc(66.666% + 1px),transparent calc(66.666% + 1px))}
+.lane.ready .lane-gauge i{background:var(--cheong)}
+.lane.ready.healer .lane-gauge i{background:var(--jade)}
+
+/* 회피 미니게임 */
+.swerve{display:flex;gap:10px;justify-content:center;margin-bottom:6px}
+.swerve div{width:42px;height:42px;border:1px solid var(--line);border-radius:var(--r);
+  display:grid;place-items:center;font-size:18px;color:var(--dust-dim);background:var(--ground)}
+.swerve div.now{border-color:var(--juhong);color:var(--hanji)}
+.swerve div.ok{border-color:var(--cheong);color:var(--cheong)}
+.swerve div.bad{border-color:var(--juhong);color:var(--juhong)}
+
+/* ── 아래 두 칸 ─────────────────────────────────────────────────── */
+.below{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:26px}
+@media (max-width:880px){
+  .below{grid-template-columns:1fr}
+  .lanes{grid-template-columns:1fr}
+  .choices{grid-template-columns:1fr}
+  .foes{padding-bottom:14px}
+  .foes-inner{grid-template-columns:1fr !important;gap:5px;max-width:none !important}
+  .aim{min-height:0}
+  .chord{flex-wrap:wrap}
+  .chord .tip{margin-left:0;text-align:left;width:100%}
+}
+.panel{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:16px 18px}
+.panel h3{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dust);margin:0 0 14px;font-weight:600}
+.knob{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;margin-bottom:12px}
+.knob label{font-size:13px}
+.knob output{font-family:var(--f-mono);font-size:12px;color:var(--cheong);font-variant-numeric:tabular-nums}
+.knob input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--cheong);height:3px}
+.foepick{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.foepick button{font-family:var(--f-body);font-size:12px;color:var(--dust);background:var(--ground);
+  border:1px solid var(--line);border-radius:var(--r);padding:5px 10px;cursor:pointer}
+.foepick button[aria-pressed=true]{color:var(--hanji);border-color:var(--cheong);background:var(--surface2)}
+.foepick button:focus-visible{outline:2px solid var(--cheong);outline-offset:1px}
+.foepick button span{font-family:var(--f-mono);font-size:10px;color:var(--dust-dim);
+  border:1px solid var(--line);border-radius:2px;padding:0 4px;margin-left:4px}
+.foepick button[aria-pressed=true] span{color:var(--cheong);border-color:var(--cheong)}
+
+#log{font-family:var(--f-mono);font-size:11.5px;line-height:1.75;color:var(--dust);
+  height:300px;overflow-y:auto;margin:0;white-space:pre-wrap;word-break:break-word}
+#log b{color:var(--hanji);font-weight:400}
+#log .win{color:var(--cheong)}
+#log .lose{color:var(--juhong)}
+#log .gold{color:var(--geum)}
+#log .heal{color:var(--jade)}
+
+
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="tally">
+      <div><b id="tAuto">0</b><span>자동</span></div>
+      <div class="hand"><b id="tHand">0</b><span>직접</span></div>
+      <div><b id="tEvade">0</b><span>회피</span></div>
+      <div class="coin"><b id="tBribe">0</b><span>협상</span></div>
+    </div>
+    <div class="purse"><b id="gold">1200</b><span>냥</span></div>
+    <p class="ratio" id="ratio">직접 비율 —</p>
+  </header>
+
+  <div class="arena" id="arena">
+    <div class="stage">
+      <canvas id="road" width="1280" height="560" role="img"
+        aria-label="트레드밀 도로 화면. 해질녘 흙길에 용병 셋이 서 있고 산적이 앞에서 다가온다."></canvas>
+      <div class="foes" id="foes" hidden></div>
+      <div class="overlay" id="overlay"></div>
+    </div>
+
+    <div class="hud" id="hud" hidden>
+      <div class="chord" id="chord"></div>
+      <div class="lanes" id="lanes"></div>
+    </div>
+
+    <svg class="wires" id="wires" aria-hidden="true">
+      <!-- 적 3명 × 노려질 수 있는 아군 3명 = 최대 9줄(두목 호령은 한 명이 셋을 동시에 노린다) -->
+      <g id="w0_0" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="w0_1" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="w0_2" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="w1_0" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="w1_1" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="w1_2" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="w2_0" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="w2_1" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="w2_2" opacity="0"><path class="glow"></path><path class="wire"></path><polygon class="head"></polygon><text class="wlabel"></text></g>
+      <g id="wg" opacity="0"><path class="guard"></path><text class="wlabel" fill="#3e9a86"></text></g>
+    </svg>
+  </div>
+
+  <div class="below">
+    <section class="panel">
+      <h3>조율</h3>
+      <div class="foepick" role="group" aria-label="조우 편성">
+        <button type="button" data-band="0" aria-pressed="true">홀로 선 도적 <span>1</span></button>
+        <button type="button" data-band="1" aria-pressed="false">도적과 궁수 <span>2</span></button>
+        <button type="button" data-band="2" aria-pressed="false">산길 도적떼 <span>3</span></button>
+        <button type="button" data-band="3" aria-pressed="false">중무장 습격대 <span>3</span></button>
+        <button type="button" data-band="4" aria-pressed="false">궁수 매복 <span>3</span></button>
+      </div>
+
+      <div class="knob">
+        <label for="kFoeSeg">적 칸당 충전</label><output id="oFoeSeg">3.0초</output>
+        <input type="range" id="kFoeSeg" min="1" max="6" step="0.25" value="3">
+      </div>
+      <div class="knob">
+        <label for="kTele">지목 후 대기</label><output id="oTele">4.0초</output>
+        <input type="range" id="kTele" min="2" max="6" step="0.25" value="4">
+      </div>
+      <div class="knob">
+        <label for="kFocusWin">선택 유지 시간</label><output id="oFocusWin">5.0초</output>
+        <input type="range" id="kFocusWin" min="1.5" max="10" step="0.5" value="5">
+      </div>
+      <div class="knob">
+        <label for="kPenalty">낭비 시 게이지</label><output id="oPenalty">50% 남음</output>
+        <input type="range" id="kPenalty" min="0" max="1" step="0.05" value="0.5">
+      </div>
+      <div class="knob">
+        <label for="kSlow">집중 슬로우</label><output id="oSlow">0.35×</output>
+        <input type="range" id="kSlow" min="0.15" max="1" step="0.05" value="0.35">
+      </div>
+      <div class="knob">
+        <label for="kFade">집중 전환</label><output id="oFade">0.13초</output>
+        <input type="range" id="kFade" min="0" max="0.5" step="0.01" value="0.13">
+      </div>
+      <div class="knob">
+        <label for="kGauge">게이지 속도</label><output id="oGauge">1.00×</output>
+        <input type="range" id="kGauge" min="0.5" max="2" step="0.05" value="1">
+      </div>
+      <div class="knob">
+        <label for="kLock">헛손질 경직</label><output id="oLock">0.40초</output>
+        <input type="range" id="kLock" min="0" max="1.2" step="0.05" value="0.4">
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>기록</h3>
+      <div id="log"></div>
+    </section>
+  </div>
+
+
+</div>
+
+<script>
+"use strict";
+
+/* ═══ 데이터 ═══════════════════════════════════════════════════════ */
+
+/* 적 레벨 = 게이지 칸 수. 칸당 충전 시간은 모두 같으므로
+   칸이 많을수록 느리게 오고 대신 아프다. 숨은 수치 없이 바만 보면 다 읽힌다.
+   적은 저마다 공격이 하나뿐이다 — 정체가 곧 예고라 학습 비용이 없다. */
+/* 스킬 개수 = 레벨 = 칸 수. 아군과 같은 규칙이다.
+   fire = 그 칸이 찼을 때 '지금 쏜다'를 고를 확률. 안 쏘면 다음 칸까지 모은다.
+   마지막 칸은 항상 1.0 — 더 모을 데가 없다.
+   결정은 칸이 차는 순간 한 번만 굴리고 즉시 카드에 드러난다(숨은 판단 없음). */
+const FOE_KINDS = {
+  bow:   { name:"궁수", level:1, hp:34, skills:[
+    { glyph:"🏹", name:"화살", dmg:14, fire:1.0 } ]},
+  axe:   { name:"도끼잡이", level:2, hp:55, skills:[
+    { glyph:"🪓", name:"후려치기", dmg:14, fire:0.45 },
+    { glyph:"🔥", name:"화공",     dmg:32, fire:1.0  } ]},
+  leader:{ name:"두목", level:3, hp:90, skills:[
+    { glyph:"🗡", name:"베기",     dmg:12, fire:0.35 },
+    { glyph:"💢", name:"내려찍기", dmg:28, fire:0.45 },
+    { glyph:"📯", name:"호령",     dmg:18, fire:1.0, aoe:true } ]},
+};
+
+/* 적 수 사다리 — 1명부터 익히고 올린다. 적이 하나면 엄호(전부 막기)는 쓸모가 없고
+   가로막기만으로 충분하다. 둘 이상부터 엄호가 의미를 갖는다. */
+const BANDS = [
+  { name:"홀로 선 도적",   kinds:["leader"] },
+  { name:"도적과 궁수",    kinds:["leader","bow"] },
+  { name:"산길 도적떼",    kinds:["leader","axe","bow"] },
+  { name:"중무장 습격대",  kinds:["leader","axe","axe"] },
+  { name:"궁수 매복",      kinds:["leader","bow","bow"] },
+];
+
+/* 레인 순서 = 딜러(Q) · 탱커(W) · 힐러(E). 탱커를 가운데 둬서 W에 맞추고,
+   보호 대상이 양옆에 오게 한다. 대상 지정은 숫자키 1·2·3(같은 순서). */
+const DPS=0, TANK=1, HEAL=2;
+
+/* 게이지 임계 — 1번은 1/3, 2번은 2/3, 3번은 가득 차야 열린다.
+   쓰면 그 임계만큼 깎인다(전부 비는 게 아니라). 그래서 가득 찬 딜러는
+   기본공격 세 번이든 돌격 한 번이든 고를 수 있다.
+   ※ "쓰면 전부 소모"로 바꾸려면 execute()의 깎는 줄을 0으로 두면 된다. */
+const TIERS = [1/3, 2/3, 1];
+const costOf = si => TIERS[Math.min(si, TIERS.length-1)];
+const MIN_TIER = TIERS[0];
+
+/* 스킬의 target: "foe"=적 지정, "ally"=아군 지정, null=대상 없음(즉발).
+   1번은 셋 다 기본공격(적 지정)으로 통일 — 손이 같은 리듬을 먼저 배우게 한다. */
+const MERCS = [
+  { key:"Q", num:"1", role:"딜러", cls:"dps", name:"강철 용병단", hp:60, fill:6.0,
+    skills:[
+      { n:"1", name:"회피", target:null,             desc:"자신을 노리는 지목을 흘린다" },
+      { n:"2", name:"공격", target:"foe", dmg:18,    desc:"산적 · 피해 18" },
+      { n:"3", name:"강타", target:"foe", dmg:42,    desc:"산적 · 피해 42 + 둔화 6초" },
+    ]},
+  { key:"W", num:"2", role:"탱커", cls:"tank", name:"길잡이 호위", hp:100, fill:9.0,
+    skills:[
+      { n:"1", name:"기본공격", target:"foe", dmg:9, desc:"산적 · 피해 9" },
+      { n:"2", name:"가로막기", target:"ally",       desc:"아군 · 6초간 대신 받음 · 피해 40%" },
+      { n:"3", name:"패링",     target:null,         desc:"자신에게 오는 지목을 되받아친다 + 둔화 6초" },
+    ]},
+  { key:"E", num:"3", role:"힐러", cls:"healer", name:"약초꾼", hp:45, fill:9.0,
+    skills:[
+      { n:"1", name:"기본공격", target:"foe", dmg:6, desc:"산적 · 피해 6" },
+      { n:"2", name:"응급처치", target:"ally",       desc:"아군 · 32 회복" },
+    ]},
+];
+
+/* 협상 — 통행료를 내고 지나간다. 나머지 셋이 화물·시간·주의력을 내는 데 비해
+   이것만 재화를 낸다. 유일하게 결과가 확정적인 대신 값이 비싸고, 적이 셀수록 오른다.
+   지속 가능하지 않다는 걸 소지금이 줄어드는 걸로 가르친다. */
+const TOLL_PER_LEVEL = 90;
+const tollFor = foes => foes.reduce((a,f)=>a+f.level,0)*TOLL_PER_LEVEL;
+
+const GUARD_SECONDS = 6;
+/* 둔화 — 그 적의 게이지가 절반 속도로 찬다. 강타와 패링이 같은 상태를 공유하며,
+   다시 걸면 시간이 갱신될 뿐 중첩되지 않는다(무한 정지 방지). */
+const SLOW_SECONDS = 6;
+const SLOW_FACTOR = 0.5;
+
+/* ═══ 상태 ═══════════════════════════════════════════════════════ */
+const S = {
+  phase:"idle", band:0,
+  foes:[], mercs:[],
+  gauges:[0,0,0], lockUntil:[0,0,0],
+  sel:{ merc:null, skill:null, t:0 },     // 3단 입력 진행 상태
+  focus:{ on:false, k:0 },                 // 집중(슬로우). k=보간값 0~1
+  guard:null,                              // {target, t}
+  approachT:0, swerve:null,
+  gold:1200,                               // 소지금 — 조우를 넘어 이어진다(전투마다 초기화하지 않음)
+  tally:{auto:0,hand:0,evade:0,bribe:0},
+  hits:0, dodges:0, parries:0, guards:0,
+};
+const K = { gauge:1, tele:4.0, lock:0.4, slow:0.35, fade:0.13, foeSeg:3.0,
+            focusWin:5.0,   // 선택 후 명령을 끝낼 수 있는 시간(실시간 초)
+            penalty:0.5 };  // 그 안에 아무것도 안 하고 놓치면 그 용병 게이지가 이 배율로 깎인다
+
+/* ═══ DOM ═══════════════════════════════════════════════════════ */
+const $ = id=>document.getElementById(id);
+const overlay=$("overlay"), hud=$("hud"), lanesEl=$("lanes"), logEl=$("log"),
+      foesEl=$("foes"), chordEl=$("chord"), arena=$("arena");
+
+function log(html,cls){
+  const d=document.createElement("div"); if(cls) d.className=cls; d.innerHTML=html;
+  logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight;
+}
+function updateTally(){
+  $("tAuto").textContent=S.tally.auto; $("tHand").textContent=S.tally.hand;
+  $("tEvade").textContent=S.tally.evade; $("tBribe").textContent=S.tally.bribe;
+  $("gold").textContent=S.gold;
+  const t=S.tally.auto+S.tally.hand+S.tally.evade+S.tally.bribe, r=$("ratio");
+  if(!t){ r.textContent="직접 비율 —"; r.classList.remove("warn"); return; }
+  const pct=Math.round(S.tally.hand/t*100);
+  r.textContent=`직접 비율 ${pct}%`; r.classList.toggle("warn",pct>45);
+}
+
+/* ═══ 도로 캔버스 ═══════════════════════════════════════════════ */
+const cv=$("road"), cx=cv.getContext("2d");
+let scroll=0, foeZ=1, dustT=0, shake=0;
+
+/* 사람 실루엣 — 산적도 용병도 같은 함수로 그린다. 네모 한 덩어리는 사람으로 안 읽힌다.
+   gy=발밑 y, h=머리끝까지 키. walk면 팔다리가 어긋나게 흔들린다. */
+function drawPerson(x, gy, h, cloth, skin, o){
+  o = o || {};
+  const sw = h*0.30;                 // 어깨 폭
+  const legH = h*0.42, torsoH = h*0.33, headR = h*0.088;
+  const hipY = gy - legH;
+  const shoY = hipY - torsoH;
+  const sg = o.walk ? Math.sin(performance.now()/1000*7.5 + (o.phase||0)) : 0;
+
+  if(o.down){                        // 쓰러짐 — 바닥에 눕힌다
+    cx.save(); cx.globalAlpha=(o.alpha??1)*0.5;
+    cx.translate(x, gy); cx.rotate(-Math.PI/2*0.92);
+    cx.fillStyle=cloth; cx.fillRect(-sw*0.42, -h*0.80, sw*0.84, h*0.62);
+    cx.fillStyle=skin; cx.beginPath(); cx.arc(0, -h*0.86, headR, 0, 7); cx.fill();
+    cx.restore(); return;
+  }
+
+  cx.save(); cx.globalAlpha=o.alpha??1;
+
+  // 다리 — 앞뒤로 어긋나게
+  cx.fillStyle = shade(cloth,0.72);
+  legPart(x - sw*0.20, hipY, legH, sg);
+  legPart(x + sw*0.20, hipY, legH, -sg);
+
+  // 몸통
+  cx.fillStyle = cloth;
+  roundRect(x - sw*0.42, shoY, sw*0.84, torsoH, h*0.035); cx.fill();
+  // 어깨
+  cx.fillStyle = shade(cloth,0.86);
+  roundRect(x - sw*0.52, shoY - h*0.012, sw*1.04, h*0.062, h*0.02); cx.fill();
+
+  // 팔 — 다리와 반대로
+  cx.fillStyle = shade(cloth,0.80);
+  armPart(x - sw*0.52, shoY + h*0.03, torsoH*0.86, -sg);
+  armPart(x + sw*0.52, shoY + h*0.03, torsoH*0.86,  sg);
+
+  // 머리
+  cx.fillStyle = skin;
+  cx.beginPath(); cx.arc(x, shoY - headR*0.92, headR, 0, 7); cx.fill();
+
+  if(o.armed){                        // 등에 멘 막대 — 실루엣에 방향성을 준다
+    cx.strokeStyle = "#3b2f22"; cx.lineWidth = Math.max(1, h*0.030);
+    cx.beginPath(); cx.moveTo(x + sw*0.20, shoY + torsoH*0.72);
+    cx.lineTo(x + sw*0.82, shoY - h*0.16); cx.stroke();
+  }
+  if(o.shield){                       // 탱커 — 방패
+    cx.fillStyle = shade(cloth,1.25);
+    roundRect(x - sw*0.92, shoY + h*0.02, sw*0.42, torsoH*0.94, h*0.02); cx.fill();
+  }
+  cx.restore();
+
+  function legPart(lx, ly, len, s){
+    cx.save(); cx.translate(lx,ly); cx.rotate(s*0.30);
+    roundRect(-h*0.036, 0, h*0.072, len, h*0.02); cx.fill();
+    cx.restore();
+  }
+  function armPart(ax, ay, len, s){
+    cx.save(); cx.translate(ax,ay); cx.rotate(s*0.42);
+    roundRect(-h*0.028, 0, h*0.056, len, h*0.018); cx.fill();
+    cx.restore();
+  }
+}
+
+function roundRect(x,y,w,h,r){
+  r=Math.min(r,Math.abs(w)/2,Math.abs(h)/2);
+  cx.beginPath();
+  cx.moveTo(x+r,y); cx.lineTo(x+w-r,y); cx.quadraticCurveTo(x+w,y,x+w,y+r);
+  cx.lineTo(x+w,y+h-r); cx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  cx.lineTo(x+r,y+h); cx.quadraticCurveTo(x,y+h,x,y+h-r);
+  cx.lineTo(x,y+r); cx.quadraticCurveTo(x,y,x+r,y); cx.closePath();
+}
+
+// #rrggbb 를 k배 밝기로
+function shade(hex,k){
+  const n=parseInt(hex.slice(1),16);
+  const r=Math.min(255,Math.round((n>>16&255)*k));
+  const g=Math.min(255,Math.round((n>>8&255)*k));
+  const b=Math.min(255,Math.round((n&255)*k));
+  return `rgb(${r},${g},${b})`;
+}
+
+// 발밑 고리(노려짐·보호 표시)
+function groundRing(x,y,rx,color,alpha){
+  cx.save(); cx.globalAlpha=alpha; cx.strokeStyle=color; cx.lineWidth=2;
+  cx.beginPath(); cx.ellipse(x,y,rx,rx*0.34,0,0,7); cx.stroke(); cx.restore();
+}
+
+/* 용병 3인 — HUD 레인 순서(딜러·탱커·힐러)와 색·좌우 위치를 맞춘다. */
+const MERC_LOOK = [
+  { cloth:"#7a4630", skin:"#c49a78", armed:true  },   // 딜러
+  { cloth:"#41564e", skin:"#c49a78", shield:true },   // 탱커
+  { cloth:"#4d5f70", skin:"#c49a78" },                // 힐러
+];
+
+function drawRoad(dt,moving){
+  const W=cv.width,H=cv.height;
+  if(moving) scroll=(scroll+dt*260)%120;
+  const sky=cx.createLinearGradient(0,0,0,H*0.55);
+  sky.addColorStop(0,"#241d18"); sky.addColorStop(1,"#6b4a33");
+  cx.fillStyle=sky; cx.fillRect(0,0,W,H*0.56);
+  cx.fillStyle="#2a2119";
+  cx.beginPath(); cx.moveTo(0,H*0.56);
+  for(let x=0;x<=W;x+=40) cx.lineTo(x,H*0.50+Math.sin(x*0.006)*16+Math.sin(x*0.013)*9);
+  cx.lineTo(W,H*0.56); cx.closePath(); cx.fill();
+  cx.fillStyle="#20190f"; cx.fillRect(0,H*0.56,W,H*0.44);
+
+  const sk=shake>0?(Math.random()-0.5)*shake*14:0;
+  cx.save(); cx.translate(sk,0);
+  const hz=H*0.56, cxm=W/2;
+  cx.fillStyle="#3a2e21";
+  cx.beginPath(); cx.moveTo(cxm-40,hz); cx.lineTo(cxm+40,hz);
+  cx.lineTo(W*0.94,H); cx.lineTo(W*0.06,H); cx.closePath(); cx.fill();
+  cx.strokeStyle="rgba(120,100,74,.30)"; cx.lineWidth=2;
+  for(let i=0;i<11;i++){
+    const p=((i*120+scroll)%1320)/1320,t=p*p,y=hz+t*(H-hz),half=40+t*(W*0.44-40);
+    cx.globalAlpha=Math.min(1,t*2.4);
+    cx.beginPath(); cx.moveTo(cxm-half,y); cx.lineTo(cxm+half,y); cx.stroke();
+  }
+  cx.globalAlpha=1;
+
+  if(S.phase==="approach"||S.phase==="fight"||S.phase==="evade"){
+    const t=1-foeZ, y=hz+t*t*(H-hz)*0.84, s=0.10+t*t*1.35;
+    const spread={1:[0],2:[-0.75,0.75]}[S.foes.length]||[-1,0,1];
+    S.foes.forEach((f,i)=>{
+      const fx=cxm+spread[i]*(60+t*t*W*0.20), ph=130*s;   // ph = 산적 키(px)
+      drawPerson(fx, y, ph,
+                 f.tele ? "#4a2318" : "#2a2018",           // 지목 중이면 붉게 달아오른다
+                 "#6b5442",
+                 { walk:true, phase:i*1.9, armed:true, down:f.dead, alpha:f.dead?0.3:1 });
+      if(f.kind==="leader"&&!f.dead){                       // 두목 — 금색 머리띠
+        cx.fillStyle="#c9a227";
+        cx.fillRect(fx-ph*0.055, y-ph*0.955, ph*0.11, Math.max(2,ph*0.022));
+      }
+      if(!f.dead){
+        if(f.tele){                                         // 지목 중 — 붉은 고리가 커진다
+          const prog=1-f.tele.t/f.tele.dur;
+          const guarded=receiversOf(f).some((rc,n)=>rc!==f.tele.targets[n]);
+          groundRing(fx, y+2, ph*(0.30+prog*0.22), guarded?"#3e9a86":"#c8452d", 0.30+prog*0.55);
+        }else{                                              // 충전 중 — 흐린 고리가 칸만큼 차오른다
+          const prog=Math.max(0,Math.min(1,f.charge/f.level));
+          groundRing(fx, y+2, ph*(0.16+prog*0.16), "#8c8071", 0.10+prog*0.24);
+        }
+      }
+    });
+  }
+
+  // ── 용병 3인 ──
+  // 마차는 그리지 않는다 — 전투에 끼지 않으므로 화면만 차지한다.
+  // 좌·중·우 순서를 HUD 레인 순서(딜러·탱커·힐러)와 맞춰, 선이 어디로 가는지 바로 읽히게 한다.
+  // 탱커는 가운데·가장 앞(=가장 크게) — 앞에 서는 역할이라는 걸 배치로 말한다.
+  if(S.mercs.length===3){
+    const aimedSet=new Set(aiming().flatMap(f=>receiversOf(f)));
+    const spots=[
+      { x:cxm-W*0.150, gy:H*0.930, h:H*0.290 },   // 딜러 — 왼쪽
+      { x:cxm,         gy:H*0.980, h:H*0.325 },   // 탱커 — 가운데·맨 앞
+      { x:cxm+W*0.150, gy:H*0.930, h:H*0.290 },   // 힐러 — 오른쪽
+    ];
+    // 뒤(작은 것)부터 그려야 앞사람이 위로 겹친다
+    [0,2,1].forEach(i=>{
+      const m=S.mercs[i], sp=spots[i], lk=MERC_LOOK[i];
+      if(!m.down){
+        if(S.guard && S.guard.target===i)                 // 가로막기 받는 중
+          groundRing(sp.x, sp.gy+2, sp.h*0.32, "#3e9a86", 0.8);
+        else if(aimedSet.has(i))                           // 노려짐
+          groundRing(sp.x, sp.gy+2, sp.h*0.32, "#c8452d", 0.8);
+      }
+      const hurt=m.hp/m.maxHp;
+      drawPerson(sp.x, sp.gy, sp.h, lk.cloth, lk.skin, {
+        walk:!m.down, phase:i*2.4, armed:lk.armed, shield:lk.shield,
+        down:m.down, alpha:m.down?0.35:(hurt<=0.35?0.72:1),
+      });
+    });
+  }
+  cx.restore();
+
+  if(dustT>0){
+    for(let i=0;i<26;i++){
+      const a=Math.random()*Math.PI*2,r=Math.random()*W*0.16*(1.4-dustT);
+      cx.globalAlpha=dustT*0.5; cx.fillStyle="#b8a184";
+      cx.beginPath(); cx.arc(cxm+Math.cos(a)*r,H*0.74+Math.sin(a)*r*0.5,4+Math.random()*16,0,7); cx.fill();
+    }
+    cx.globalAlpha=1;
+  }
+  const vg=cx.createRadialGradient(cxm,H*0.5,H*0.25,cxm,H*0.5,H*0.95);
+  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,.62)");
+  cx.fillStyle=vg; cx.fillRect(0,0,W,H);
+}
+
+/* ═══ 헬퍼 ═══════════════════════════════════════════════════════ */
+function setOverlay(h){ overlay.innerHTML=h; }
+function aliveFoes(){ return S.foes.filter(f=>!f.dead); }
+function aliveMercs(){ return S.mercs.filter(m=>!m.down); }
+function aiming(){ return aliveFoes().filter(f=>f.tele); }
+/* 이 지목이 실제로 누구를 때리는가 — 가로막기를 반영한 최종 수신자 */
+/* 이 지목이 실제로 누구를 때리는가 — 엄호/가로막기를 반영한 최종 수신자 */
+// 지목 하나(ti)가 실제로 누구를 때리는가 — 가로막기가 걸렸으면 탱커가 대신 받는다.
+function receiverOf(f, ti){
+  if(S.guard && S.guard.target===ti && !S.mercs[TANK].down) return TANK;
+  return ti;
+}
+function mitigationOf(f, ti){
+  if(S.guard && S.guard.target===ti && !S.mercs[TANK].down) return 0.4;
+  return 1;
+}
+// 이 적의 지목이 최종적으로 때리는 아군들(두목 호령은 여럿이다)
+function receiversOf(f){ return f.tele ? f.tele.targets.map(t=>receiverOf(f,t)) : []; }
+
+/* ═══ 조우 ═══════════════════════════════════════════════════════ */
+function startEncounter(){
+  const band=BANDS[S.band];
+  S.phase="approach"; S.approachT=6; foeZ=1; dustT=0; shake=0;
+  S.gauges=[0,0,0]; S.lockUntil=[0,0,0];
+  S.hits=0; S.dodges=0; S.parries=0; S.guards=0;
+  S.sel={merc:null,skill:null,t:0}; S.guard=null; S.focus={on:false,k:0};
+  S.mercs=MERCS.map(m=>({hp:m.hp,maxHp:m.hp,down:false}));
+
+  S.foes=band.kinds.map((k,i)=>{
+    const P=FOE_KINDS[k];
+    const dup=band.kinds.filter(x=>x===k).length>1;
+    const ord=band.kinds.slice(0,i+1).filter(x=>x===k).length-1;
+    return { kind:k, name:P.name+(dup?` ${"갑을병"[ord]}`:""),
+             level:P.level, skills:P.skills, hp:P.hp, maxHp:P.hp,
+             // 충전량(칸 단위, 0~level). 시작값을 어긋내 셋이 동시에 터지지 않게 한다.
+             charge:P.level*(0.45-i*0.18),
+             tierChecked:0,          // 지금까지 '쏠까' 굴려서 넘긴 칸 수
+             tele:null, dead:false, slowT:0 };
+  });
+
+  foesEl.hidden=false; hud.hidden=true;
+  buildFoes(); syncFoes();
+  log(`<b>─ ${band.name} 조우</b> (${S.foes.map(f=>f.name).join(" · ")})`);
+  renderApproach();
+}
+
+function buildFoes(){
+  const n=S.foes.length, maxW=[0,360,720,1120][n]||1120;
+  const cards=S.foes.map((f,i)=>`
+    <div class="foe${f.kind==="leader"?" leader":""}" id="foe${i}" data-i="${i}" role="button" tabindex="0"
+         aria-label="${f.name} — 공격 대상 ${i+1}번">
+      <div class="foe-head">
+        <span class="foe-num">${i+1}</span>
+        <span class="foe-name">${f.name}</span>
+        <span class="foe-role">LV${f.level}</span>
+      </div>
+      <div class="foe-hp"><i id="fhp${i}"></i></div>
+      <div class="foe-gauge" id="fgw${i}">
+        ${Array.from({length:f.level},(_,s)=>`<span class="seg"><i id="fg${i}_${s}"></i></span>`).join("")}
+      </div>
+      <div class="aim" id="aim${i}"><span class="g">·</span><span>충전</span></div>
+    </div>`).join("");
+  foesEl.innerHTML=`<div class="foes-inner" style="grid-template-columns:repeat(${n},minmax(0,1fr));max-width:${maxW}px">${cards}</div>`;
+  foesEl.querySelectorAll(".foe").forEach(el=>{
+    const i=+el.dataset.i;
+    el.addEventListener("click",()=>foeClicked(i));
+    el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); foeClicked(i); } });
+  });
+}
+
+/* 지금 고르는 중인 대상 종류. null이면 대상 고르는 단계가 아니다. */
+function pickingKind(){
+  const m=S.sel.merc, s=S.sel.skill;
+  if(m===null||s===null) return null;
+  return MERCS[m].skills[s].target;   // "foe" | "ally" | null
+}
+
+function foeClicked(i){
+  if(S.phase!=="fight") return;
+  if(pickingKind()==="foe") selectTarget(i);
+}
+
+function syncFoes(){
+  const pickFoe = pickingKind()==="foe";
+  S.foes.forEach((f,i)=>{
+    const el=$("foe"+i); if(!el) return;
+    el.classList.toggle("dead",f.dead);
+    el.classList.toggle("telegraphing",!!f.tele);
+    el.classList.toggle("targetable",pickFoe&&!f.dead);
+    const hp=$("fhp"+i); if(hp) hp.style.width=(Math.max(0,f.hp)/f.maxHp*100)+"%";
+    el.classList.toggle("aiming",!!f.tele);
+    el.classList.toggle("slowed",f.slowT>0);
+    // 칸별 채움 — 다 차면 지목이 잡히고 칸 전체가 붉어진다
+    const charge = f.tele ? f.level : f.charge;
+    for(let s=0;s<f.level;s++){
+      const seg=$("fg"+i+"_"+s);
+      if(!seg) continue;
+      seg.style.width=(Math.max(0,Math.min(1,charge-s))*100)+"%";
+      // 흘려보낸 칸 — "이 놈은 더 큰 걸 노린다"가 여기서 읽힌다
+      seg.parentElement.classList.toggle("passed", !f.tele && s<f.tierChecked);
+    }
+
+    const aim=$("aim"+i); if(!aim) return;
+    if(f.dead){ aim.innerHTML=`<span class="g">✕</span><span>쓰러짐</span>`; return; }
+
+    if(f.tele){
+      // 지목 구간 — 무엇을, 누구를 때릴지 둘 다 정해졌다
+      const sk=f.tele.skill;
+      const who=receiversOf(f).map((rc,n)=>{
+        const redirected = rc!==f.tele.targets[n];
+        return `<span class="who${redirected?" covered":""}">${MERCS[rc].name}</span>`;
+      }).join("<span style='color:var(--dust-dim)'>·</span>");
+      aim.innerHTML=`<span class="g">${sk.glyph}</span><span>${sk.name}</span>`
+        +`<span class="arrow">→</span>${who}`
+        +`<span style="margin-left:auto;font-family:var(--f-mono);font-size:10px">${f.tele.t.toFixed(1)}s</span>`;
+    }else{
+      // 충전 구간 — 다음 칸에서 나올 수 있는 스킬을 미리 보여준다
+      const nx=f.skills[Math.min(f.tierChecked,f.level-1)];
+      const nextAt=Math.min(f.tierChecked+1,f.level);
+      const left=(nextAt-f.charge)*K.foeSeg/(f.slowT>0?SLOW_FACTOR:1);
+      aim.innerHTML=`<span class="g" style="opacity:.5">${nx.glyph}</span><span>${nx.name}</span>`
+        +(f.tierChecked>0?`<span style="color:var(--geum);font-size:11px">${f.tierChecked}칸 넘김</span>`:``)
+        +(f.slowT>0?`<span style="color:var(--cheong);font-size:11px">둔화 ${f.slowT.toFixed(1)}s</span>`:``)
+        +`<span style="margin-left:auto;font-family:var(--f-mono);font-size:10px">${Math.max(0,left).toFixed(1)}s</span>`;
+    }
+  });
+}
+
+function renderApproach(){
+  const C=2*Math.PI*16;
+  const toll=tollFor(S.foes), canPay=S.gold>=toll;
+  setOverlay(`
+    <div class="card">
+      <div class="countdown">
+        <svg class="ring" viewBox="0 0 38 38" aria-hidden="true">
+          <circle class="bg" cx="19" cy="19" r="16"></circle>
+          <circle class="fg" id="ringFg" cx="19" cy="19" r="16"
+            stroke-dasharray="${C}" stroke-dashoffset="0" transform="rotate(-90 19 19)"></circle>
+        </svg>
+        <span id="cdText">6.0초 뒤 자동 처리</span>
+      </div>
+      <div class="choices four">
+        <button class="choice recommended" data-act="auto"><kbd>1</kbd>자동</button>
+        <button class="choice" data-act="hand"><kbd>2</kbd>직접</button>
+        <button class="choice" data-act="evade"><kbd>3</kbd>회피</button>
+        <button class="choice${canPay?"":" broke"}" data-act="bribe"${canPay?"":" disabled"}>
+          <kbd>4</kbd>협상<em>${toll}냥${canPay?"":" · 부족"}</em>
+        </button>
+      </div>
+    </div>`);
+  overlay.querySelectorAll(".choice").forEach(b=>b.addEventListener("click",()=>choose(b.dataset.act)));
+}
+
+function choose(act){
+  if(S.phase!=="approach") return;
+  if(act==="auto"){ S.tally.auto++; updateTally(); resolveAuto(false); }
+  if(act==="hand"){ S.tally.hand++; updateTally(); startFight(false); }
+  if(act==="evade"){ S.tally.evade++; updateTally(); startEvade(); }
+  if(act==="bribe"){
+    const toll=tollFor(S.foes);
+    if(S.gold<toll){ log(`<span class="lose">통행료 ${toll}냥을 낼 수 없다</span> (소지금 ${S.gold}냥)`); return; }
+    S.gold-=toll; S.tally.bribe++; updateTally();
+    log(`<span class="gold">협상</span> — 통행료 <b>${toll}냥</b>을 치르고 길을 텄다 (남은 ${S.gold}냥)`);
+    foeZ=1;
+    finish(true,`협상 성립 — <span class="gold">통행료 ${toll}냥</span>`,false,false,toll);
+  }
+}
+
+/* ── 자동 ── */
+function resolveAuto(ambushed){
+  S.phase="auto"; setOverlay(""); foeZ=0; dustT=1; shake=1;
+  const foePower=S.foes.reduce((a,f)=>a+f.maxHp,0);
+  const power=62*(ambushed?0.6:1);
+  const chance=Math.max(0.08,Math.min(0.92,power/(power+foePower*0.62)));
+  const win=Math.random()<chance;
+  setTimeout(()=>{
+    const pct=Math.round(chance*100);
+    if(win) finish(true,`자동 판정 — 무사 통과 <span class="gold">(통과 확률 ${pct}%)</span>`);
+    else    finish(false,`자동 판정 — 약탈당함 <span class="lose">(통과 확률 ${pct}%)</span>`,true);
+  },800);
+}
+
+/* ── 회피 ── */
+function startEvade(){ S.phase="evade"; S.swerve={steps:[],idx:0,want:null,t:0}; nextSwerve(); }
+function nextSwerve(){
+  const sw=S.swerve; if(!sw) return;
+  if(sw.idx>=3){ finishEvade(sw.steps.filter(s=>s==="ok").length>=2); return; }
+  sw.want=Math.random()<0.5?"left":"right"; sw.t=1.1; renderSwerve();
+}
+function renderSwerve(){
+  const sw=S.swerve;
+  const cells=[0,1,2].map(i=>{
+    const st=sw.steps[i];
+    if(st==="ok") return `<div class="ok">✓</div>`;
+    if(st==="bad") return `<div class="bad">✕</div>`;
+    if(i===sw.idx) return `<div class="now">${sw.want==="left"?"←":"→"}</div>`;
+    return `<div>·</div>`;
+  }).join("");
+  setOverlay(`
+    <div class="card">
+      <h2>따돌린다</h2>
+      <p>뜨는 방향으로 핸들을 꺾으세요. 셋 중 둘을 맞히면 벗어납니다.</p>
+      <div class="swerve">${cells}</div>
+      <p style="margin:10px 0 0;font-size:12px">방향키 ← → · 남은 시간 <b id="swT">1.1</b>초</p>
+    </div>`);
+}
+function swerveInput(dir){
+  const sw=S.swerve;
+  if(S.phase!=="evade"||!sw||!sw.want) return;
+  sw.steps[sw.idx]=(dir===sw.want)?"ok":"bad"; sw.idx++; sw.want=null;
+  renderSwerve(); setTimeout(nextSwerve,220);
+}
+function finishEvade(ok){
+  if(ok){ foeZ=1; finish(true,`회피 성공 — 전투 없음. <span class="gold">짐 10% 버림 · 도착 지연</span>`,false,true); }
+  else { log(`회피 실패 — <span class="lose">기습당한 채 전투 시작</span>`); startFight(true); }
+}
+
+/* ── 직접 전투 ── */
+function startFight(ambushed){
+  S.phase="fight"; setOverlay(""); foeZ=0; dustT=1; shake=1;
+  hud.hidden=false;
+  // 시작 게이지 — 딜러는 2번까지, 나머지는 1번을 바로 쓸 수 있는 정도
+  S.gauges=ambushed?[0,0,0]:[0.70,0.40,0.35];
+  if(ambushed) S.foes.forEach(f=>f.charge=f.level*0.85);   // 기습 — 적이 거의 다 모은 채 시작
+  buildLanes(); syncMercs(); renderChord();
+  log(ambushed?`직접 전투 <span class="lose">(기습 — 게이지 0에서 시작)</span>`:`직접 전투 시작`);
+}
+
+function buildLanes(){
+  lanesEl.innerHTML=MERCS.map((m,i)=>`
+    <div class="lane ${m.cls}" id="lane${i}" data-i="${i}" role="button" tabindex="0"
+         aria-label="${m.role} ${m.name}">
+      <div class="lane-head">
+        <span class="lane-key">${m.key}</span>
+        <span class="lane-name">${m.name}</span>
+        <span class="lane-role">${m.role}</span>
+        <span class="lane-badges" id="lb${i}"></span>
+      </div>
+      <div class="hpline"><div class="track"><i id="mh${i}"></i></div><b id="mn${i}">${m.hp}</b></div>
+      <div class="skills">
+        ${m.skills.map((s,si)=>`
+          <button class="skillrow" type="button" data-i="${i}" data-s="${si}" id="sk${i}_${si}">
+            <span class="n">${s.n}</span>
+            <span class="cost">${Math.round(costOf(si)*100)}%</span>
+            <span><b>${s.name}</b> — ${s.desc}</span>
+          </button>`).join("")}
+      </div>
+      <div class="lane-gauge"><i id="g${i}"></i></div>
+    </div>`).join("");
+
+  lanesEl.querySelectorAll(".lane").forEach(el=>{
+    const i=+el.dataset.i;
+    el.addEventListener("click",e=>{
+      if(e.target.closest(".skillrow")) return;      // 스킬 버튼은 따로 처리
+      laneClicked(i);
+    });
+    el.addEventListener("keydown",e=>{
+      if(e.key==="Enter"||e.key===" "){ e.preventDefault(); laneClicked(i); }
+    });
+  });
+  lanesEl.querySelectorAll(".skillrow").forEach(b=>{
+    b.addEventListener("click",e=>{
+      e.stopPropagation();
+      const i=+b.dataset.i, si=+b.dataset.s;
+      if(S.sel.merc!==i) selectMerc(i);
+      if(S.sel.merc===i) selectSkill(si);
+    });
+  });
+}
+
+function syncMercs(){
+  const aimedSet=new Set(aiming().flatMap(f=>receiversOf(f)));
+  S.mercs.forEach((m,i)=>{
+    const bar=$("mh"+i), num=$("mn"+i), lane=$("lane"+i), badges=$("lb"+i);
+    if(bar){
+      bar.style.width=(Math.max(0,m.hp)/m.maxHp*100)+"%";
+      const p=m.hp/m.maxHp;
+      bar.className=p<=0.3?"crit":(p<=0.6?"hurt":"");
+    }
+    if(num) num.textContent=Math.max(0,m.hp);
+    if(lane){
+      lane.classList.toggle("down",m.down);
+      lane.classList.toggle("aimed",!m.down&&aimedSet.has(i));
+      lane.classList.toggle("selected",S.sel.merc===i);
+      lane.classList.toggle("guarded",!!S.guard&&S.guard.target===i);
+      lane.classList.toggle("targetable", pickingKind()==="ally" && !m.down);
+    }
+    if(badges){
+      let h="";
+      if(!m.down&&aimedSet.has(i)) h+=`<span class="aimtag">◀ 노려짐</span>`;
+      if(S.guard&&S.guard.target===i) h+=`<span class="guardtag">🛡 ${S.guard.t.toFixed(1)}s</span>`;
+      badges.innerHTML=h;
+    }
+    // 스킬줄 — 지금 감당 가능한 것만 또렷하게
+    MERCS[i].skills.forEach((s,si)=>{
+      const row=$("sk"+i+"_"+si);
+      if(!row) return;
+      row.classList.toggle("picked",S.sel.merc===i&&S.sel.skill===si);
+      row.classList.toggle("short", S.gauges[i]+1e-6 < costOf(si));
+    });
+  });
+}
+
+/* ═══ 3단 입력 ═══════════════════════════════════════════════════ */
+function renderChord(){
+  const m=S.sel.merc, s=S.sel.skill;
+  const mercBox = m===null ? "?" : MERCS[m].key;
+  const skillBox = s===null ? "?" : MERCS[m].skills[s].n;
+  const kind = pickingKind();
+  const active = m!==null;
+
+  let tip;
+  if(m===null) tip=`<b>Q W E</b> 로 용병을 고르세요`;
+  else if(s===null) tip=`<b>${MERCS[m].name}</b> — 숫자로 스킬 선택 · <b>Esc</b> 취소`;
+  else if(kind==="foe") tip=`<b>${MERCS[m].skills[s].name}</b> — 때릴 <b style="color:var(--juhong)">산적</b> <b>1 2 3</b> · <b>Esc</b> 취소`;
+  else if(kind==="ally") tip=`<b>${MERCS[m].skills[s].name}</b> — 대상 <b style="color:var(--cheong)">아군</b> <b>1 2 3</b> · <b>Esc</b> 취소`;
+  else tip=`실행 중…`;
+
+  const tLabel = kind==="foe" ? "산적" : (kind==="ally" ? "아군" : "대상");
+  chordEl.className="chord"+(active?" active":"");
+  chordEl.innerHTML=`
+    <span class="step ${m===null?"on":"done"}"><span class="box">${mercBox}</span>용병</span>
+    <span class="sep">▸</span>
+    <span class="step ${m!==null&&s===null?"on":(s!==null?"done":"")}"><span class="box">${skillBox}</span>스킬</span>
+    <span class="sep">▸</span>
+    <span class="step ${kind?"on":""}"><span class="box">${kind?"?":"—"}</span>${tLabel}</span>
+    <span class="tip">${tip}</span>`;   // 남은 시간은 선택 하이라이트의 점멸로만 알린다
+}
+
+/* 선택을 그냥 지운다 — 플레이어 잘못이 아닌 경우(용병 사망·전투 종료)에만 쓴다. */
+function clearSel(){
+  lanesEl.querySelectorAll(".lane").forEach(el=>el.style.removeProperty("--pulse"));
+  S.sel={merc:null,skill:null,t:0,blink:0};
+  S.focus.on=false;
+  syncMercs(); syncFoes(); renderChord();
+}
+
+/* 집중을 받아놓고 아무것도 안 한 채 놓으면 그 용병의 게이지를 깎는다.
+   시간 초과·Esc·다른 용병으로 갈아타기가 전부 여기로 온다.
+   그래서 재선택으로 슬로우를 무한히 이어붙이려면 매번 게이지를 태워야 한다. */
+function abandonSel(reason){
+  const i=S.sel.merc;
+  if(i===null) return;
+  if(S.focus.on && S.gauges[i]>0){
+    const before=S.gauges[i];
+    S.gauges[i]*=K.penalty;
+    log(`<span class="lose">집중 낭비</span> — ${MERCS[i].name} 게이지 `
+        +`${Math.round(before*100)}% → <b>${Math.round(S.gauges[i]*100)}%</b> (${reason})`);
+  }else if(reason){
+    log(`명령 취소 — ${reason}`);
+  }
+  clearSel();
+}
+
+function selectMerc(i){
+  if(S.phase!=="fight") return;
+  if(S.mercs[i].down){ log(`<span class="lose">${MERCS[i].name}</span>은 쓰러져 있다`); return; }
+  if(S.sel.merc!==null && S.sel.merc!==i) abandonSel("다른 용병으로 바꿈");   // 오조작도 값을 치른다
+  S.sel={merc:i,skill:null,t:K.focusWin,blink:0};
+  // 집중은 '뭐라도 쓸 수 있는' 용병에게만 걸린다 — 쓸 게 없으면 슬로우도 없고 벌칙도 없다.
+  S.focus.on = S.gauges[i] >= MIN_TIER;
+  // 스킬이 하나뿐이면 바로 스킬 단계까지 진행
+  if(MERCS[i].skills.length===1) selectSkill(0);
+  else { syncMercs(); renderChord(); }
+}
+
+function selectSkill(si){
+  const i=S.sel.merc; if(i===null) return;
+  const sk=MERCS[i].skills[si]; if(!sk) return;
+  S.sel.skill=si;
+  if(!sk.target) execute(i,si,-1);          // 대상 없는 스킬은 바로 나간다
+  else { syncMercs(); syncFoes(); renderChord(); }
+}
+
+function selectTarget(t){
+  const i=S.sel.merc, si=S.sel.skill;
+  if(i===null||si===null) return;
+  const kind=MERCS[i].skills[si].target;
+
+  if(kind==="foe"){
+    const f=S.foes[t];
+    if(!f){ log(`<span class="lose">${t+1}번 산적은 없다</span>`); return; }
+    if(f.dead){ log(`<span class="lose">${f.name}</span>은 이미 쓰러졌다`); return; }
+  }else{
+    if(!S.mercs[t]) return;
+    if(S.mercs[t].down){ log(`<span class="lose">${MERCS[t].name}</span>은 쓰러져 있다`); return; }
+  }
+  execute(i,si,t);
+}
+
+function laneClicked(i){
+  if(S.phase!=="fight") return;
+  if(pickingKind()==="ally") selectTarget(i);
+  else selectMerc(i);                        // 적 고르는 중에 레인을 누르면 용병 재선택
+}
+
+/* ═══ 실행 ═══════════════════════════════════════════════════════ */
+function damageFoe(f,dmg){
+  f.hp-=dmg;
+  if(f.hp<=0){ f.hp=0; f.dead=true; f.tele=null; log(`<span class="win">${f.name} 쓰러짐</span>`); }
+}
+
+function execute(i,si,target){
+  const now=performance.now()/1000;
+  const sk=MERCS[i].skills[si];
+  S.sel={merc:null,skill:null,t:0};
+  S.focus.on=false;                        // 스킬이 나가면 집중이 풀린다
+
+  if(now<S.lockUntil[i]){ log(`<span class="lose">${MERCS[i].name} 경직 중</span>`); syncMercs(); renderChord(); return; }
+
+  const cost=costOf(si);
+  if(S.gauges[i]+1e-6 < cost){                    // 이 스킬을 감당할 게이지가 없다 — 헛손질
+    S.lockUntil[i]=now+K.lock;
+    const el=$("lane"+i);
+    if(el){ el.classList.add("locked"); setTimeout(()=>el.classList.remove("locked"),300); }
+    log(`<span class="lose">헛손질</span> — ${MERCS[i].name} ${sk.name}에 게이지 부족`
+        +` (${Math.round(S.gauges[i]*100)}% / ${Math.round(cost*100)}%) · 경직 ${K.lock.toFixed(2)}초`);
+    syncMercs(); renderChord(); return;
+  }
+
+  S.gauges[i]=Math.max(0,S.gauges[i]-cost);       // 쓴 만큼만 깎인다
+  shake=Math.max(shake,0.4);
+
+  if(i===DPS && si===0){                          // ── 회피: 자신을 노리는 지목을 흘린다
+    // 자기에게 오는 지목만 뺀다 — 두목 호령이라도 딜러 몫만 흘리고 나머지는 그대로 간다
+    const mine=aiming().filter(f=>receiversOf(f).includes(DPS));
+    if(!mine.length) log(`회피 — <span class="lose">흘릴 공격이 없다</span>. 게이지만 날렸다`);
+    else{
+      mine.forEach(f=>{
+        f.tele.targets=f.tele.targets.filter(t=>receiverOf(f,t)!==DPS);
+        if(!f.tele.targets.length){ f.tele=null; f.charge=0; f.tierChecked=0; }
+      });
+      S.dodges+=mine.length;
+      log(`<span class="win">회피</span> — 강철 용병단이 자기에게 온 지목 <b>${mine.length}개</b>를 흘렸다`);
+    }
+  }
+  else if(i===DPS){                                // ── 공격 / 강타
+    const f=S.foes[target];
+    if(f && !f.dead){
+      damageFoe(f, sk.dmg);
+      if(si===2 && !f.dead){                       // 강타는 때리고 늦춘다
+        f.slowT=SLOW_SECONDS;
+        log(`<span class="gold">강타</span> — ${f.name}에게 피해 ${sk.dmg} · <b>둔화 ${SLOW_SECONDS}초</b>`);
+      }else{
+        log(si===2 ? `<span class="gold">강타</span> — ${f.name}에게 피해 ${sk.dmg}`
+                   : `공격 — ${f.name}에게 피해 ${sk.dmg}`);
+      }
+    }
+  }
+  else if(i===TANK && si===0){                     // ── 탱커 기본공격
+    const f=S.foes[target];
+    if(f && !f.dead){ damageFoe(f, sk.dmg); log(`길잡이 호위 기본공격 — ${f.name}에게 피해 ${sk.dmg}`); }
+  }
+  else if(i===TANK && si===1){                    // ── 가로막기(지속, 아군 한 명)
+    S.guard={ target, t:GUARD_SECONDS }; S.guards++;
+    log(`<span class="win">가로막기</span> — <b>${MERCS[target].name}</b> 앞을 ${GUARD_SECONDS}초간 막아선다 (피해 40%)`);
+  }
+  else if(i===TANK && si===2){                    // ── 패링: 뜬 지목을 튕기고 그 적을 둔화
+    // 패링은 제 몸으로 받아치는 동작이다 — 탱커에게 '실제로 오는' 지목만 튕긴다.
+    // 가로막기로 남의 공격을 떠맡은 상태면 그것도 탱커에게 오는 것이라 튕길 수 있다.
+    const mine=aiming().filter(f=>receiversOf(f).includes(TANK));
+    if(!mine.length) log(`패링 — <span class="lose">나에게 오는 공격이 없다</span>. 게이지만 날렸다`);
+    else{
+      let broke=0;
+      mine.forEach(f=>{
+        f.tele.targets=f.tele.targets.filter(t=>receiverOf(f,t)!==TANK);
+        // 완전히 무산 → 자세도 판단도 처음부터(모아둔 계획이 통째로 날아간다)
+        if(!f.tele.targets.length){ f.tele=null; f.charge=0; f.tierChecked=0; broke++; }
+        f.slowT=SLOW_SECONDS;                       // 패링은 피해 없이 늦추기만 한다
+      });
+      S.parries+=mine.length;
+      log(`<span class="win">패링</span> — 지목 <b>${mine.length}개</b>를 되받아쳤다 · <b>둔화 ${SLOW_SECONDS}초</b>`
+          +(broke?` · <b>${broke}명 게이지 초기화</b>`:``));
+    }
+  }
+  else if(i===HEAL && si===0){                     // ── 힐러 기본공격
+    const f=S.foes[target];
+    if(f && !f.dead){ damageFoe(f, sk.dmg); log(`약초꾼 기본공격 — ${f.name}에게 피해 ${sk.dmg}`); }
+  }
+  else if(i===HEAL && si===1){                    // ── 응급처치(아군 지정)
+    const m=S.mercs[target], before=m.hp;
+    m.hp=Math.min(m.maxHp,m.hp+32);
+    const g=m.hp-before;
+    log(g<32
+      ? `<span class="heal">응급처치</span> — ${MERCS[target].name} 회복 ${g} <span class="lose">(${32-g} 버려짐)</span>`
+      : `<span class="heal">응급처치</span> — ${MERCS[target].name} 회복 32`);
+  }
+
+  syncFoes(); syncMercs(); renderChord();
+
+  const lead=S.foes.find(f=>f.kind==="leader");
+  if(lead&&lead.dead){
+    const rest=aliveFoes().length;
+    finish(true, rest
+      ? `두목 격파 — <span class="gold">남은 ${rest}명이 흩어졌다</span>. 회피 ${S.dodges} · 가로막기 ${S.guards} · 패링 ${S.parries} · 피격 ${S.hits}`
+      : `전멸 — 회피 ${S.dodges} · 가로막기 ${S.guards} · 패링 ${S.parries} · 피격 ${S.hits}`);
+    return;
+  }
+  if(aliveFoes().length===0)
+    finish(true,`전멸 — 회피 ${S.dodges} · 가로막기 ${S.guards} · 패링 ${S.parries} · 피격 ${S.hits}`);
+}
+
+/* 지목 대상 고르기 — 쓰러진 용병은 피한다.
+   두목(aoe)은 전원, 궁수는 가장 약한 쪽, 나머지는 무작위. */
+function pickTargets(f, sk){
+  const cand=S.mercs.map((m,i)=>({m,i})).filter(x=>!x.m.down);
+  if(!cand.length) return [];
+  if(sk && sk.aoe) return cand.map(x=>x.i);
+  if(f.kind==="bow"){
+    cand.sort((a,b)=>(a.m.hp/a.m.maxHp)-(b.m.hp/b.m.maxHp));
+    return [cand[0].i];
+  }
+  return [cand[Math.floor(Math.random()*cand.length)].i];
+}
+
+function landAttack(f){
+  const sk=f.tele.skill;
+  const list=f.tele.targets.slice();
+  // 아군과 같은 규칙 — 쓴 스킬의 칸 수만큼만 깎인다.
+  // 3칸까지 모아놓고 2칸짜리를 쓰면 1칸이 남고, 그 1칸으로 바로 다음 판단에 들어간다.
+  const cost=f.skills.indexOf(sk)+1;
+  f.tele=null;
+  f.charge=Math.max(0, f.charge-cost);
+  f.tierChecked=0;                                  // 남은 칸으로 처음부터 다시 고른다
+
+  list.forEach(t0=>{
+    let ti=receiverOf(f,t0), mit=mitigationOf(f,t0), redirected=ti!==t0;
+    if(S.mercs[ti].down){                           // 수신자가 쓰러졌으면 보호가 풀린 채 재지정
+      const alt=pickTargets(f,sk)[0];
+      if(alt===undefined) return;
+      ti=alt; mit=1; redirected=false;
+    }
+    const dmg=Math.round(sk.dmg*mit);
+    const m=S.mercs[ti];
+    m.hp=Math.max(0,m.hp-dmg);
+    S.hits++;
+    log(`<span class="lose">${f.name}의 ${sk.name}</span> → ${MERCS[ti].name} 피해 ${dmg}`
+        +(redirected?` <span class="win">(가로막기 · 40%)</span>`:``));
+
+    if(m.hp<=0&&!m.down){
+      m.down=true;
+      log(`<span class="lose">${MERCS[ti].name} 쓰러짐</span>`);
+      if(S.guard&&(S.guard.target===ti||ti===TANK)) S.guard=null;   // 탱커가 죽으면 가로막기도 사라진다
+      if(S.sel.merc===ti) clearSel();      // 쓰러져서 풀린 건 플레이어 잘못이 아니라 벌칙 없음
+    }
+  });
+
+  shake=Math.max(shake,1);
+  syncMercs();
+  if(aliveMercs().length===0)
+    finish(false,`용병 전멸 — <span class="lose">화물을 지킬 사람이 없다</span>`,true);
+}
+
+/* ── 결과 ── */
+function finish(win,msg,looted,evaded,toll){
+  S.phase="result"; hud.hidden=true;
+  S.foes.forEach(f=>f.tele=null); S.guard=null; S.sel={merc:null,skill:null,t:0};
+  S.focus.on=false;
+  syncFoes();
+  log(win?`<span class="win">${msg}</span>`:`<span class="lose">${msg}</span>`);
+  const fallen=S.mercs.filter(m=>m.down).length;
+  const loss=toll
+    ? `<p style="color:var(--geum)">재화 -${toll}냥 · 화물·용병 무손실</p>`
+    : looted
+    ? `<p style="color:var(--juhong)">무역품 -40% · 여물 -25%${fallen?` · 용병 ${fallen}명 사망`:""}</p>`
+    : (evaded ? `<p style="color:var(--geum)">무역품 -10% · 도착 지연</p>`
+      : (fallen ? `<p style="color:var(--geum)">화물 무사 · <span style="color:var(--juhong)">용병 ${fallen}명 사망</span></p>`
+                : `<p style="color:var(--cheong)">손실 없음</p>`));
+  setOverlay(`
+    <div class="card">
+      <h2>${win?"길이 열렸다":"당했다"}</h2>
+      <p>${msg}</p>
+      ${loss}
+      <div class="choices" style="grid-template-columns:1fr">
+        <button class="choice" data-act="again"><kbd>R</kbd>다시 조우</button>
+      </div>
+    </div>`);
+  overlay.querySelector(".choice").addEventListener("click",()=>startEncounter());
+}
+
+/* ═══ 지목선 · 보호선 ═══════════════════════════════════════════ */
+function updateWires(){
+  const ar=arena.getBoundingClientRect();
+
+  // 편성·지목 수가 바뀌면 안 쓰는 선이 남으니 매 프레임 전부 껐다 켠다
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+    const g=$("w"+i+"_"+j); if(g) g.setAttribute("opacity","0");
+  }
+
+  const links=[];
+  if(S.phase==="fight"){
+    S.foes.forEach((f,i)=>{
+      if(f.dead||!f.tele) return;
+      f.tele.targets.forEach(t0=>links.push({f,i,t0,rc:receiverOf(f,t0)}));
+    });
+  }
+
+  links.forEach(({f,i,t0,rc})=>{
+    const g=$("w"+i+"_"+t0);   // 원래 지목 대상으로 그룹을 잡아 겹치지 않게
+    if(!g) return;
+    const src=$("foe"+i), dst=$("lane"+rc);
+    if(!src||!dst) return;
+
+    const s=src.getBoundingClientRect(), d=dst.getBoundingClientRect();
+    const sx=s.left+s.width/2-ar.left, sy=s.bottom-ar.top-2;
+    const tx=d.left+d.width/2-ar.left, ty=d.top-ar.top+1;
+    const dy=Math.max(1,ty-sy);
+
+    const wire=g.querySelector(".wire"), glow=g.querySelector(".glow"),
+          head=g.querySelector(".head"), label=g.querySelector(".wlabel");
+    const dAttr=`M${sx},${sy} C${sx},${sy+dy*0.42} ${tx},${ty-dy*0.42} ${tx},${ty}`;
+    wire.setAttribute("d",dAttr); glow.setAttribute("d",dAttr);
+
+    const col = rc!==t0 ? "#3e9a86" : "#c8452d";
+    wire.setAttribute("stroke",col); glow.setAttribute("stroke",col);
+
+    const L=wire.getTotalLength();
+    const p=Math.max(0,Math.min(1,1-f.tele.t/f.tele.dur));
+    wire.setAttribute("stroke-dasharray",L);
+    wire.setAttribute("stroke-dashoffset",L*(1-p));
+
+    const pt=wire.getPointAtLength(L*p), pt0=wire.getPointAtLength(Math.max(0,L*p-8));
+    const ang=Math.atan2(pt.y-pt0.y,pt.x-pt0.x)*180/Math.PI;
+    head.setAttribute("points","-11,-6.5 1,0 -11,6.5");
+    head.setAttribute("transform",`translate(${pt.x},${pt.y}) rotate(${ang})`);
+    head.setAttribute("fill",col);
+
+    const flip=tx<ar.width*0.5;
+    label.setAttribute("x",pt.x+(flip?14:-14));
+    label.setAttribute("y",pt.y-10);
+    label.setAttribute("text-anchor",flip?"start":"end");
+    label.setAttribute("fill",col);
+    label.textContent=`${f.tele.skill.glyph} ${f.tele.skill.name} ${f.tele.t.toFixed(1)}s`;
+    g.setAttribute("opacity","1");
+  });
+
+  // 가로막기 — 탱커에서 보호 대상으로 이어지는 점선
+  const gg=$("wg");
+  if(S.phase==="fight"&&S.guard&&!S.mercs[TANK].down&&S.guard.target!==TANK){
+    const a=$("lane"+TANK), b=$("lane"+S.guard.target);
+    if(a&&b){
+      const ra=a.getBoundingClientRect(), rb=b.getBoundingClientRect();
+      const ax=ra.left+ra.width/2-ar.left, ay=ra.top-ar.top-8;
+      const bx=rb.left+rb.width/2-ar.left, by=rb.top-ar.top-8;
+      const mid=Math.min(ay,by)-26;
+      gg.querySelector(".guard").setAttribute("d",`M${ax},${ay} C${ax},${mid} ${bx},${mid} ${bx},${by}`);
+      const lb=gg.querySelector(".wlabel");
+      lb.setAttribute("x",(ax+bx)/2); lb.setAttribute("y",mid-4);
+      lb.setAttribute("text-anchor","middle");
+      lb.textContent=`🛡 가로막기 ${S.guard.t.toFixed(1)}s`;
+      gg.setAttribute("opacity","1");
+    }
+  } else gg.setAttribute("opacity","0");
+}
+
+/* ═══ 루프 ═══════════════════════════════════════════════════════ */
+let last=performance.now();
+function tick(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+
+  // 집중 — 시간 배율은 부드럽게 붙고 떨어진다(툭 끊기면 렉처럼 보인다).
+  const focusOn = S.phase==="fight" && S.focus.on;
+  const targetK = focusOn ? 1 : 0;
+  S.focus.k += (targetK - S.focus.k) * Math.min(1, dt / Math.max(0.001, K.fade));
+  if(Math.abs(targetK - S.focus.k) < 0.002) S.focus.k = targetK;
+  const scale = 1 - (1 - K.slow) * S.focus.k;
+  const gdt = dt * scale;                    // 게임 시간 — 아래 전부 이걸 쓴다
+  document.body.classList.toggle("focus", focusOn);
+
+  drawRoad(gdt,S.phase!=="fight"&&S.phase!=="result");
+  if(dustT>0) dustT=Math.max(0,dustT-gdt*0.8);
+  if(shake>0) shake=Math.max(0,shake-dt*3);   // 흔들림만 실시간(슬로우 중에 질질 끌지 않게)
+
+  if(S.phase==="approach"){
+    S.approachT-=dt; foeZ=Math.max(0,S.approachT/6);
+    const cd=$("cdText"),ring=$("ringFg");
+    if(cd) cd.textContent=Math.max(0,S.approachT).toFixed(1)+"초 뒤 자동 처리";
+    if(ring){ const C=2*Math.PI*16; ring.style.strokeDashoffset=C*(1-Math.max(0,S.approachT)/6); }
+    if(S.approachT<=0){ S.tally.auto++; updateTally(); log(`무입력 — 자동으로 넘어감`); resolveAuto(false); }
+  }
+
+  if(S.phase==="evade"&&S.swerve&&S.swerve.want){
+    S.swerve.t-=dt;
+    const el=$("swT"); if(el) el.textContent=Math.max(0,S.swerve.t).toFixed(1);
+    if(S.swerve.t<=0){ S.swerve.steps[S.swerve.idx]="bad"; S.swerve.idx++; S.swerve.want=null;
+      renderSwerve(); setTimeout(nextSwerve,220); }
+  }
+
+  if(S.phase==="fight"){
+    for(let i=0;i<3;i++){
+      if(!S.mercs[i].down&&S.gauges[i]<1)
+        S.gauges[i]=Math.min(1,S.gauges[i]+gdt/(MERCS[i].fill/K.gauge));
+      const g=$("g"+i); if(g) g.style.width=(S.gauges[i]*100)+"%";
+      const l=$("lane"+i);
+      if(l&&!S.mercs[i].down) l.classList.toggle("ready",S.gauges[i]>=MIN_TIER);
+    }
+
+    if(S.guard){
+      S.guard.t-=gdt;
+      if(S.guard.t<=0){ log(`가로막기 종료 — <b>${MERCS[S.guard.target].name}</b>`); S.guard=null; }
+    }
+
+    if(S.sel.merc!==null){
+      S.sel.t-=dt;                           // 선택 유지 시간은 실시간이다 — 슬로우로 늘어나지 않는다
+      if(S.sel.t<=0) abandonSel("시간 초과");
+      else{
+        // 남은 시간이 줄수록 점멸이 빨라진다(1.1Hz → 5.5Hz). 숫자 대신 이걸로 읽힌다.
+        const frac=1-Math.max(0,S.sel.t)/K.focusWin;
+        S.sel.blink=(S.sel.blink||0)+dt*(1.1+frac*frac*4.4);
+        const pulse=0.5-0.5*Math.cos(S.sel.blink*Math.PI*2);
+        const lane=$("lane"+S.sel.merc);
+        if(lane) lane.style.setProperty("--pulse",pulse.toFixed(3));
+      }
+    }
+
+    S.foes.forEach(f=>{
+      if(f.dead) return;
+      if(f.slowT>0) f.slowT=Math.max(0,f.slowT-gdt);
+      if(f.tele){ f.tele.t-=gdt; if(f.tele.t<=0) landAttack(f); }
+      else{
+        const rate=(f.slowT>0?SLOW_FACTOR:1)/Math.max(0.1,K.foeSeg);
+        f.charge=Math.min(f.level, f.charge + gdt*rate);
+        // 칸이 하나 찰 때마다 '지금 쏠까' 한 번 굴린다. 안 쏘면 그 칸은 넘긴 것으로 표시된다.
+        while(f.tierChecked<f.level && f.charge>=f.tierChecked+1){
+          const sk=f.skills[f.tierChecked];
+          if(Math.random()<sk.fire){
+            const targets=pickTargets(f,sk);
+            if(targets.length){ f.tele={skill:sk,targets,t:K.tele,dur:K.tele}; }
+            break;
+          }
+          f.tierChecked++;                          // 흘려보냄 — 더 큰 걸 노린다
+        }
+      }
+    });
+    syncFoes(); syncMercs();
+  }
+  updateWires();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ═══ 입력 ═══════════════════════════════════════════════════════ */
+addEventListener("keydown",e=>{
+  if(e.repeat) return;
+  const k=e.key, low=k.toLowerCase();
+
+  if(S.phase==="approach"){
+    if(k==="1"){e.preventDefault();choose("auto");}
+    if(k==="2"){e.preventDefault();choose("hand");}
+    if(k==="3"){e.preventDefault();choose("evade");}
+    if(k==="4"){e.preventDefault();choose("bribe");}
+    return;
+  }
+  if(S.phase==="evade"){
+    if(k==="ArrowLeft"){e.preventDefault();swerveInput("left");}
+    if(k==="ArrowRight"){e.preventDefault();swerveInput("right");}
+    return;
+  }
+  if(S.phase==="result"){
+    if(low==="r"){e.preventDefault();startEncounter();}
+    return;
+  }
+  if(S.phase!=="fight") return;
+
+  if(k==="Escape"){ e.preventDefault(); abandonSel("Esc 취소"); return; }
+
+  const mercKey={q:DPS,w:TANK,e:HEAL}[low];
+  if(mercKey!==undefined){ e.preventDefault(); selectMerc(mercKey); return; }
+
+  if(k==="1"||k==="2"||k==="3"){
+    e.preventDefault();
+    const n=+k-1;
+    if(S.sel.merc===null) return;                       // 용병부터 골라야 한다
+    if(S.sel.skill===null) selectSkill(n);
+    else if(pickingKind()) selectTarget(n);
+  }
+});
+
+/* ═══ 조율 ═══════════════════════════════════════════════════════ */
+$("kFoeSeg").addEventListener("input",e=>{K.foeSeg=+e.target.value; $("oFoeSeg").textContent=K.foeSeg.toFixed(1)+"초";});
+$("kTele").addEventListener("input",e=>{K.tele=+e.target.value; $("oTele").textContent=K.tele.toFixed(1)+"초";});
+$("kFocusWin").addEventListener("input",e=>{K.focusWin=+e.target.value; $("oFocusWin").textContent=K.focusWin.toFixed(1)+"초";});
+$("kPenalty").addEventListener("input",e=>{K.penalty=+e.target.value; $("oPenalty").textContent=Math.round(K.penalty*100)+"% 남음";});
+$("kSlow").addEventListener("input",e=>{K.slow=+e.target.value; $("oSlow").textContent=K.slow.toFixed(2)+"×";});
+$("kFade").addEventListener("input",e=>{
+  K.fade=+e.target.value; $("oFade").textContent=K.fade.toFixed(2)+"초";
+  document.documentElement.style.setProperty("--fade",K.fade+"s");
+});
+$("kGauge").addEventListener("input",e=>{K.gauge=+e.target.value; $("oGauge").textContent=K.gauge.toFixed(2)+"×";});
+$("kLock").addEventListener("input",e=>{K.lock=+e.target.value; $("oLock").textContent=K.lock.toFixed(2)+"초";});
+
+document.querySelectorAll(".foepick button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".foepick button").forEach(x=>x.setAttribute("aria-pressed","false"));
+    b.setAttribute("aria-pressed","true");
+    S.band=+b.dataset.band;
+    log(`편성 교체 — <b>${BANDS[S.band].name}</b>`);
+    startEncounter();
+  });
+});
+
+/* ═══ 시작 ═══════════════════════════════════════════════════════ */
+updateTally();
+log(`<b>Q</b> 딜러 · <b>W</b> 탱커 · <b>E</b> 힐러 → 숫자로 스킬 → 숫자로 대상`);
+log(`조우: <b>1</b> 자동 · <b>2</b> 직접 · <b>3</b> 회피 · <b>4</b> 협상(통행료)`);
+log(`딜러 <b>Q1</b> 회피 · <b>Q2</b> 공격 · <b>Q3</b> 강타`);
+log(`탱커 <b>W1</b> 기본공격 · <b>W2</b> 가로막기 · <b>W3</b> 패링`);
+log(`힐러 <b>E1</b> 기본공격 · <b>E2</b> 응급처치 · 취소 <b>Esc</b> · 다시하기 <b>R</b>`);
+startEncounter();
+</script>
