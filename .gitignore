@@ -162,3 +162,6 @@ crashlytics-build.properties
 
 # Unity 크래시 복구 임시 폴더 (자동 생성 잡파일 — 추적 안 함)
 /[Aa]ssets/_Recovery/
+# 로컬 작업용 임시 폴더 (프로토타입·검증 산출물 — 저장소에 넣지 않는다)
+# ※ 윈도우 Git Bash 에서 '> /dev/null' 을 쓰면 여기에 실제 폴더가 생긴다.
+/dev/
